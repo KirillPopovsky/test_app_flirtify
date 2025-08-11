@@ -5,6 +5,8 @@ import {useRoute} from '../../../shared/navigation/interfaces.ts'
 import {Pages} from '../../../shared/navigation/screens.ts'
 import {useAuthState} from '../../Authorization/common/authState.ts'
 import {useNavigation} from '@react-navigation/native'
+import {check, PERMISSIONS} from 'react-native-permissions'
+import {isIos} from '../../../shared/theme/common.ts'
 
 type Remote = { producerId: string; kind: 'video' | 'audio'; stream: MediaStream };
 type Unknown = Record<string, any>
@@ -17,6 +19,7 @@ export const useRoomClient = () => {
 
   const [localStream, setLocalStream] = useState<MediaStream | undefined>()
   const [remotes, setRemotes] = useState<Remote[]>([])
+
 
 
   const callbacks = useMemo(

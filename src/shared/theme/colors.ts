@@ -7,4 +7,5 @@ export const colors = {
   card: '#D3D3D3',
   streamRemoteBackground: '#141414',
   streamLocalBackground: '#2e2e2e',
+  link: '#047bd6',
 }

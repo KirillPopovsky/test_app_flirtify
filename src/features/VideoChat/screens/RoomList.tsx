@@ -12,6 +12,7 @@ import {useAuthStore} from '../../Authorization/common/authStore.ts'
 import {useNavigation} from '../../../shared/navigation/interfaces.ts'
 import {Pages} from '../../../shared/navigation/screens.ts'
 import {useVideoChatStore} from '../common/useVideoChatStore.ts'
+import {PermissionChecker} from '../components/PermissionChecker.tsx'
 
 type TProps = {}
 
@@ -39,7 +40,7 @@ export const RoomList = memo(({}: TProps) => {
             <Input
               placeholder={'Enter room id'}
               onChangeText={setRoomId}
-              inputMode={'none'}
+              inputMode={'text'}
               onSubmitEditing={onJoinRoomPress}
             />
           </View>
@@ -47,6 +48,7 @@ export const RoomList = memo(({}: TProps) => {
         </View>
         <Text style={styles.recentRoomsLabel}>Recent rooms</Text>
         <FlatList data={rooms} renderItem={renderRoom}/>
+        <PermissionChecker/>
         <Button text={'Logout'} color={colors.negative} onPress={logout}/>
       </View>
     </SafeAreaView>
