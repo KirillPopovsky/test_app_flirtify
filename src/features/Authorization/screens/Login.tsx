@@ -1,5 +1,15 @@
 import React, {memo, useCallback, useMemo, useState} from 'react'
-import {ImageStyle, StyleSheet, Text, TextInput, TextStyle, View, ViewStyle} from 'react-native'
+import {
+  ImageStyle,
+  Keyboard,
+  StyleSheet,
+  Text,
+  TextInput,
+  TextStyle,
+  TouchableWithoutFeedback,
+  View,
+  ViewStyle,
+} from 'react-native'
 import {Input} from '../../../shared/components/Input.tsx'
 import {Button} from '../../../shared/components/Button.tsx'
 import {colors} from '../../../shared/theme/colors.ts'
@@ -24,6 +34,7 @@ export const Login = memo(({}: TProps) => {
   const onSubmitEmail = useCallback(() => passwordRef.current?.focus(), [email])
 
   return (
+    <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
     <View style={styles.container}>
       <View style={styles.headerContainer}>
         <FontAwesomeIcon icon={faVideo} size={40} color={colors.primary}/>
@@ -34,6 +45,7 @@ export const Login = memo(({}: TProps) => {
         <Input
           placeholder={'Enter your email'}
           inputMode={'email'}
+          enterKeyHint={'next'}
           onChangeText={setEmail}
           onSubmitEditing={onSubmitEmail}/>
       </View>
@@ -42,6 +54,7 @@ export const Login = memo(({}: TProps) => {
         <Input
           ref={passwordRef}
           placeholder={'Enter your password'}
+          enterKeyHint={'go'}
           secureTextEntry
           onChangeText={setPassword}
           onSubmitEditing={onLoginPress}/>
@@ -51,6 +64,7 @@ export const Login = memo(({}: TProps) => {
       </View>
       <Button text={'Login'} isLoading={isLogining} onPress={onLoginPress}/>
     </View>
+    </TouchableWithoutFeedback>
   )
 })
 
@@ -69,7 +83,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 16,
     marginBottom: 32,
-    marginTop: 200,
+    marginTop: 150,
   } as ViewStyle,
   header: {
     fontSize: 32,

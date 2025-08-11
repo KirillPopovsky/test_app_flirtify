@@ -8,5 +8,5 @@ export interface IVideoChatState {
 }
 
 export const useVideoChatState = create(persist<IVideoChatState>((set, get) => ({
-  ...createList(set, get, 'recentRooms', [] as string[]),
+  ...createList(set, get, 'recentRooms', ['example-room'] as string[]),
 }), createPersistOptions('videochat')))

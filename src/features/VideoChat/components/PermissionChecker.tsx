@@ -1,5 +1,5 @@
 import React, {memo, useCallback, useEffect} from 'react'
-import {Linking, StyleSheet, Text, TextStyle, TouchableOpacity, ViewStyle} from 'react-native'
+import {AppState, Linking, StyleSheet, Text, TextStyle, TouchableOpacity, ViewStyle} from 'react-native'
 import {usePermissionCheck} from '../common/usePermissionCheck.ts'
 import {colors} from '../../../shared/theme/colors.ts'
 
@@ -7,12 +7,15 @@ type TProps = {}
 
 export const PermissionChecker = memo(({}: TProps) => {
   const {isDenied, checkPermission} = usePermissionCheck()
+  const appState = AppState
 
   useEffect(() => {
     checkPermission()
+    const subscription = AppState.addEventListener('change', checkPermission)
+    return () => subscription.remove()
   }, [])
 
-  const onOpenSettingsPress = useCallback(() => Linking.openSettings, [])
+  const onOpenSettingsPress = useCallback(() => Linking.openSettings(), [])
 
   return (
     isDenied ?
@@ -27,7 +30,15 @@ export const PermissionChecker = memo(({}: TProps) => {
 
 const styles = StyleSheet.create({
   container: {
-    margin: 24,
+
+    position: 'absolute',
+    top: 100,
+    left: 16,
+    right: 16,
+    zIndex: 10,
+    backgroundColor: colors.card,
+    borderRadius: 18,
+    padding: 16,
   } as ViewStyle,
   text: {
     fontSize: 14,

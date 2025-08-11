@@ -5,6 +5,7 @@ import {StreamView} from '../components/StreamView.tsx'
 import {colors} from '../../../shared/theme/colors.ts'
 import {useRoomClient} from '../common/useRoomClient.ts'
 import {StreamsView} from '../components/StreamsView.tsx'
+import {PermissionChecker} from '../components/PermissionChecker.tsx'
 
 type TProps = {}
 
@@ -13,6 +14,7 @@ export const RoomCall = memo(({}: TProps) => {
 
   return (
     <View style={styles.container}>
+      <PermissionChecker/>
       <View style={styles.endCallButton}>
         <EndCallButton onPress={onEndCallPress}/>
       </View>

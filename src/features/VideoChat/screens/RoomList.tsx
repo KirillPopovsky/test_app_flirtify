@@ -1,5 +1,15 @@
 import React, {memo, useCallback, useState} from 'react'
-import {FlatList, SafeAreaView, StyleSheet, Text, TextStyle, View, ViewStyle} from 'react-native'
+import {
+  FlatList,
+  Keyboard,
+  SafeAreaView,
+  StyleSheet,
+  Text,
+  TextStyle,
+  TouchableWithoutFeedback,
+  View,
+  ViewStyle,
+} from 'react-native'
 import {Header} from '../../../shared/components/Header.tsx'
 import {Input} from '../../../shared/components/Input.tsx'
 import {IconButton} from '../../../shared/components/IconButton.tsx'
@@ -24,6 +34,7 @@ export const RoomList = memo(({}: TProps) => {
 
   const onJoinRecentRoomPress = useCallback((roomId: string) => navigation.navigate(Pages.RoomCall, {roomId}), [])
   const onJoinRoomPress = useCallback(() => {
+    if (roomId === '') return
     navigation.navigate(Pages.RoomCall, {roomId})
     handleJoinRoom(roomId)
   }, [roomId, handleJoinRoom])
@@ -33,7 +44,8 @@ export const RoomList = memo(({}: TProps) => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.container}>
+      <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+        <View style={styles.container}>
         <Header text={'Video Chat'}/>
         <View style={styles.inputContainer}>
           <View style={styles.inputWrapper}>
@@ -42,15 +54,16 @@ export const RoomList = memo(({}: TProps) => {
               onChangeText={setRoomId}
               inputMode={'text'}
               onSubmitEditing={onJoinRoomPress}
+              enterKeyHint={'go'}
             />
           </View>
-          <IconButton icon={faVideo} onPress={onJoinRoomPress}/>
+          <IconButton disabled={roomId === ''} icon={faVideo} onPress={onJoinRoomPress}/>
         </View>
         <Text style={styles.recentRoomsLabel}>Recent rooms</Text>
         <FlatList data={rooms} renderItem={renderRoom}/>
-        <PermissionChecker/>
         <Button text={'Logout'} color={colors.negative} onPress={logout}/>
       </View>
+      </TouchableWithoutFeedback>
     </SafeAreaView>
   )
 })
@@ -59,7 +72,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     alignItems: 'stretch',
-    paddingHorizontal: 16,
+    padding: 16,
   } as ViewStyle,
   inputWrapper: {flex: 1} as ViewStyle,
   inputContainer: {
