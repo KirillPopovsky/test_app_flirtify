@@ -1,17 +1,17 @@
-import * as mediasoupClient from 'mediasoup-client';
+import * as mediasoupClient from 'mediasoup-client'
 import type {
+  Consumer,
+  DtlsParameters,
+  IceCandidate,
+  IceParameters,
+  Producer,
   RtpCapabilities,
   RtpParameters,
-  DtlsParameters,
-  IceParameters,
-  IceCandidate,
-  Producer,
-  Consumer,
-  //@ts-ignore
-} from 'mediasoup-client/lib/types';
-import { mediaDevices, registerGlobals, MediaStream, MediaStreamTrack } from 'react-native-webrtc';
-import * as protoo from 'protoo-client';
-import RTCRtpEncodingParameters from 'react-native-webrtc/lib/typescript/RTCRtpEncodingParameters';
+} from 'mediasoup-client/lib/types'
+
+import {mediaDevices, MediaStream, MediaStreamTrack, registerGlobals} from 'react-native-webrtc'
+import * as protoo from 'protoo-client'
+import RTCRtpEncodingParameters from 'react-native-webrtc/lib/typescript/RTCRtpEncodingParameters'
 
 registerGlobals();
 
@@ -25,63 +25,49 @@ export interface ConnectOptions {
 }
 
 export interface Callbacks {
-  onNotification?: (n: ProtooNotification) => void;
-  onRemoteStream?: (payload: { producerId: string; stream: MediaStream; kind: TrackKind }) => void;
-  onRemoteTrackEnded?: (payload: { producerId?: string; kind?: TrackKind }) => void;
+  onNotification?: (n: ProtooNotification) => void
+  onRemoteStream?: (p: { producerId: string; stream: MediaStream; kind: TrackKind }) => void
+  onRemoteTrackEnded?: (p: { producerId?: string; kind?: TrackKind }) => void;
   onConnectionStateChange?: (state: { send?: string; recv?: string }) => void;
   onError?: (error: unknown) => void;
 }
 
 export interface ProtooNotification {
   method: string;
-  data?: any;
+  data?: unknown;
 }
 
 export interface ProtooRequest {
   method: string;
-  data?: any;
+  data?: unknown;
 }
 
-export interface BaseTransport {
+type Direction = 'send' | 'recv';
+
+interface BaseTransport {
   id: string;
-  close: () => void;
-  on: (event: 'connect' | 'connectionstatechange' | 'produce', ...args: any[]) => void;
+
+  close(): void;
+
+  on(event: 'connect' | 'connectionstatechange' | 'produce', ...args: any[]): void;
 }
 
 export interface SendTransportLike extends BaseTransport {
-  //TODO: fix types
-
-  // on: (
-  //   event: 'connect',
-  //   handler: (
-  //     args: { dtlsParameters: DtlsParameters },
-  //     callback: () => void,
-  //     errback: (error: any) => void,
-  //   ) => void,
-  // ) => void;
-  // on: (
-  //   event: 'produce',
-  //   handler: (
-  //     args: { kind: TrackKind; rtpParameters: RtpParameters; appData?: any },
-  //     callback: (res: { id: string }) => void,
-  //     errback: (error: any) => void,
-  //   ) => void,
-  // ) => void;
-  // on: (event: 'connectionstatechange', handler: (state: string) => void) => void;
-  produce: (opts: { track: MediaStreamTrack; appData?: any; encodings?: RTCRtpEncodingParameters[] }) => Promise<Producer>;
+  produce(opts: {
+    track: MediaStreamTrack;
+    appData?: any;
+    encodings?: RTCRtpEncodingParameters[];
+  }): Promise<Producer>;
 }
 
 export interface RecvTransportLike extends BaseTransport {
-  // on: (
-  //   event: 'connect',
-  //   handler: (
-  //     args: { dtlsParameters: DtlsParameters },
-  //     callback: () => void,
-  //     errback: (error: any) => void,
-  //   ) => void,
-  // ) => void;
-  // on: (event: 'connectionstatechange', handler: (state: string) => void) => void;
-  consume: (opts: { id: string; producerId: string; kind: TrackKind; rtpParameters: RtpParameters; appData?: any }) => Promise<Consumer>;
+  consume(opts: {
+    id: string;
+    producerId: string;
+    kind: TrackKind;
+    rtpParameters: RtpParameters;
+    appData?: any;
+  }): Promise<Consumer>;
 }
 
 export interface StateSnapshot {
@@ -93,109 +79,169 @@ export interface StateSnapshot {
   remoteStreamsCount: number;
 }
 
+/* ============================
+ * Internal state
+ * ============================ */
+
 let device: mediasoupClient.Device | null = null;
 let protooPeer: protoo.Peer | null = null;
 let sendTransport: SendTransportLike | null = null;
 let recvTransport: RecvTransportLike | null = null;
 
-const producers: Map<TrackKind, Producer> = new Map();
-const consumers: Map<string, Consumer> = new Map();
-const remoteStreams: Map<string, MediaStream> = new Map();
-let localStream: MediaStream | null = null;
+const producers = new Map<TrackKind, Producer>()
+const consumers = new Map<string, Consumer>()
+const remoteStreams = new Map<string, MediaStream>()
 
+let localStream: MediaStream | null = null;
 let cb: Callbacks = {};
 
-function emit<K extends keyof Callbacks>(name: K, payload: Parameters<NonNullable<Callbacks[K]>>[0]) {
-  try {
-    const fn = cb[name] as any;
-    if (typeof fn === 'function') fn(payload);
-  } catch (err) {
-    // eslint-disable-next-line no-console
-    console.warn(`[mediasoupClient] callback ${String(name)} threw`, err);
+/* ============================
+ * Small helpers
+ * ============================ */
+
+function emit<K extends keyof Callbacks>(
+  name: K,
+  payload: Parameters<NonNullable<Callbacks[K]>>[0],
+) {
+  const fn = cb[name] as any
+  if (typeof fn === 'function') {
+    try {
+      fn(payload)
+    } catch (err) {
+      console.warn(`[mediasoupClient] callback ${String(name)} threw`, err)
+    }
   }
 }
 
-export async function connectToRoom({ wsUrl, roomId, peerId, callbacks = {} }: ConnectOptions): Promise<boolean> {
+function stopAndReleaseStream(stream?: MediaStream | null) {
+  if (!stream) return
+  try {
+    stream.getTracks().forEach((t) => {
+      try {
+        t.stop()
+      } catch {
+      }
+    })
+  } catch {
+  }
+}
+
+async function tryRequest(method: string, data?: any) {
+  if (!protooPeer) throw new Error('Protoo not connected')
+  return protooPeer.request(method, data)
+}
+
+async function resumeConsumer(consumerId: string) {
+  try {
+    await tryRequest('resumeConsumer', {consumerId})
+  } catch {
+    await tryRequest('consumerResume', {consumerId}).catch(() => {
+    })
+  }
+}
+
+export async function connectToRoom({
+                                      wsUrl,
+                                      roomId,
+                                      peerId,
+                                      callbacks = {},
+                                    }: ConnectOptions): Promise<boolean> {
   cb = { ...cb, ...callbacks };
 
   const transport = new protoo.WebSocketTransport(wsUrl);
   protooPeer = new protoo.Peer(transport);
 
   return new Promise<boolean>((resolve, reject) => {
-    protooPeer!.on('open', async () => {
+    if (!protooPeer) return reject(new Error('Protoo peer not created'))
+
+    protooPeer.on('open', async () => {
       try {
-        const routerRtpCapabilities: RtpCapabilities = await protooPeer!.request('getRouterRtpCapabilities');
+        const routerRtpCapabilities = (await tryRequest('getRouterRtpCapabilities')) as RtpCapabilities
         device = new mediasoupClient.Device();
         await device.load({ routerRtpCapabilities });
 
         {
-          const t: {
+          const t = (await tryRequest('createWebRtcTransport', {
+            producing: true,
+            consuming: false,
+          })) as {
             id: string;
             iceParameters: IceParameters;
             iceCandidates: IceCandidate[];
             dtlsParameters: DtlsParameters;
-          } = await protooPeer!.request('createWebRtcTransport', { producing: true, consuming: false });
+          };
 
-          const st = device!.createSendTransport({
+          sendTransport = device.createSendTransport({
             id: t.id,
             iceParameters: t.iceParameters,
             iceCandidates: t.iceCandidates,
             dtlsParameters: t.dtlsParameters,
             iceServers: [],
           }) as unknown as SendTransportLike;
-          sendTransport = st;
+
           setupTransportEvents(sendTransport, 'send');
         }
 
         {
-          const t: {
+          const t = (await tryRequest('createWebRtcTransport', {
+            producing: false,
+            consuming: true,
+          })) as {
             id: string;
             iceParameters: IceParameters;
             iceCandidates: IceCandidate[];
             dtlsParameters: DtlsParameters;
-          } = await protooPeer!.request('createWebRtcTransport', { producing: false, consuming: true });
+          };
 
-          const rt = device!.createRecvTransport({
+          recvTransport = device.createRecvTransport({
             id: t.id,
             iceParameters: t.iceParameters,
             iceCandidates: t.iceCandidates,
             dtlsParameters: t.dtlsParameters,
             iceServers: [],
           }) as unknown as RecvTransportLike;
-          recvTransport = rt;
+
           setupTransportEvents(recvTransport, 'recv');
         }
 
         attachProtooRequestHandlers();
 
-        await protooPeer!.request('join', {
+        await tryRequest('join', {
           roomId,
           displayName: peerId,
           device: { name: 'React Native' },
-          rtpCapabilities: device!.rtpCapabilities,
+          rtpCapabilities: device.rtpCapabilities,
         });
 
         protooPeer!.on('notification', (n: ProtooNotification) => {
           emit('onNotification', n);
-          switch (n.method) {
-            case 'producerClosed': {
-              const { producerId, kind } = (n.data || {}) as { producerId?: string; kind?: TrackKind };
-              for (const [consumerId, consumer] of consumers) {
-                if ((consumer as any).producerId === producerId) {
-                  try { (consumer as any).track?.stop?.(); consumer.close(); } catch {}
-                  consumers.delete(consumerId);
-                }
+
+          if (n.method !== 'producerClosed') return
+
+          const {producerId, kind} = (n.data || {}) as {
+            producerId?: string;
+            kind?: TrackKind;
+          }
+
+          for (const [consumerId, consumer] of consumers) {
+            if (consumer.producerId === producerId) {
+              try {
+                consumer.track?.stop?.()
+              } catch {
               }
-              if (producerId && remoteStreams.has(producerId)) {
-                const s = remoteStreams.get(producerId)!;
-                try { s.getTracks().forEach(t => t.stop()); } catch {}
-                remoteStreams.delete(producerId);
-                emit('onRemoteTrackEnded', { producerId, kind });
+              try {
+                consumer.close()
+              } catch {
               }
-              break;
+              consumers.delete(consumerId)
             }
-            default:
-              break;
+          }
+
+          if (producerId && remoteStreams.has(producerId)) {
+            const s = remoteStreams.get(producerId)!
+            stopAndReleaseStream(s)
+            remoteStreams.delete(producerId)
+            emit('onRemoteTrackEnded', {producerId, kind})
           }
         });
 
@@ -207,7 +253,7 @@ export async function connectToRoom({ wsUrl, roomId, peerId, callbacks = {} }: C
       }
     });
 
-    protooPeer!.on('failed', () => {
+    protooPeer.on('failed', () => {
       const err = new Error('Protoo connection failed');
       cb.onError?.(err);
       reject(err);
@@ -215,9 +261,13 @@ export async function connectToRoom({ wsUrl, roomId, peerId, callbacks = {} }: C
   });
 }
 
-export async function startSendingVideo({ withAudio = true }: { withAudio?: boolean } = {}): Promise<MediaStream> {
+export async function startSendingVideo(
+  {withAudio = true}: { withAudio?: boolean } = {},
+): Promise<MediaStream> {
   if (!sendTransport) throw new Error('sendTransport not ready');
+
   localStream = await mediaDevices.getUserMedia({ video: true, audio: !!withAudio });
+
   const videoTrack = localStream.getVideoTracks?.()[0];
   const audioTrack = withAudio ? localStream.getAudioTracks?.()[0] : null;
 
@@ -225,39 +275,71 @@ export async function startSendingVideo({ withAudio = true }: { withAudio?: bool
     const vp = await sendTransport.produce({ track: videoTrack });
     producers.set('video', vp);
   }
+
   if (audioTrack) {
     const ap = await sendTransport.produce({ track: audioTrack });
     producers.set('audio', ap);
   }
+
   return localStream;
 }
 
+/**
+ * Остановка локальной публикации.
+ */
 export async function stopSendingVideo(): Promise<void> {
   for (const [, producer] of producers) {
-    try { (producer as any).track?.stop?.(); producer.close(); } catch {}
+    try {
+      producer.track?.stop?.()
+    } catch {
+    }
+    try {
+      producer.close()
+    } catch {
+    }
   }
   producers.clear();
-  if (localStream) {
-    try { localStream.getTracks().forEach(t => t.stop()); } catch {}
-    localStream = null;
-  }
+
+  stopAndReleaseStream(localStream)
+  localStream = null
 }
 
+/**
+ * Полный выход из комнаты.
+ */
 export async function leaveRoom(): Promise<void> {
   try {
     await stopSendingVideo();
 
     for (const [, consumer] of consumers) {
-      try { (consumer as any).track?.stop?.(); consumer.close(); } catch {}
+      try {
+        consumer.track?.stop?.()
+      } catch {
+      }
+      try {
+        consumer.close()
+      } catch {
+      }
     }
     consumers.clear();
 
-    if (recvTransport) { try { recvTransport.close(); } catch {} recvTransport = null; }
-    if (sendTransport) { try { sendTransport.close(); } catch {} sendTransport = null; }
+    try {
+      recvTransport?.close()
+    } catch {
+    }
+    try {
+      sendTransport?.close()
+    } catch {
+    }
+    recvTransport = null
+    sendTransport = null
 
     try { await protooPeer?.request('leave'); } catch {}
-
-    if (protooPeer) { try { protooPeer.close(); } catch {} protooPeer = null; }
+    try {
+      protooPeer?.close()
+    } catch {
+    }
+    protooPeer = null
 
     device = null;
   } catch (err) {
@@ -277,123 +359,151 @@ export function getState(): StateSnapshot {
   };
 }
 
-function setupTransportEvents(transport: SendTransportLike | RecvTransportLike, direction: 'send' | 'recv') {
-  transport.on('connect', async ({ dtlsParameters }: { dtlsParameters: DtlsParameters }, callback: () => void, errback: (e: any) => void) => {
-    try {
-      await protooPeer!.request('connectWebRtcTransport', {
-        transportId: transport.id,
-        dtlsParameters,
-      });
-      callback();
-    } catch (err) {
-      console.error(`[mediasoupClient] ${direction} connect error`, err);
-      errback(err);
-    }
-  });
-
-  if (direction === 'send') {
-    (transport as SendTransportLike).on('produce', async (
-      { kind, rtpParameters }: { kind: TrackKind; rtpParameters: RtpParameters },
-      callback: (res: { id: string }) => void,
-      errback: (e: any) => void,
+function setupTransportEvents(transport: SendTransportLike | RecvTransportLike, direction: Direction) {
+  (transport as BaseTransport).on(
+    'connect',
+    async (
+      {dtlsParameters}: { dtlsParameters: DtlsParameters },
+      callback: () => void,
+      errback: (e: unknown) => void,
     ) => {
       try {
-        const { id } = await protooPeer!.request('produce', {
+        await tryRequest('connectWebRtcTransport', {
           transportId: transport.id,
-          kind,
-          rtpParameters,
-        });
-        callback({ id });
+          dtlsParameters,
+        })
+        callback()
       } catch (err) {
-        console.error('[mediasoupClient] produce error', err);
-        errback(err);
+        console.error(`[mediasoupClient] ${direction} connect error`, err)
+        errback(err)
       }
-    });
+    },
+  )
+
+  if (direction === 'send') {
+    (transport as SendTransportLike).on(
+      'produce',
+      async (
+        {kind, rtpParameters}: { kind: TrackKind; rtpParameters: RtpParameters },
+        callback: (res: { id: string }) => void,
+        errback: (e: unknown) => void,
+      ) => {
+        try {
+          const {id} = (await tryRequest('produce', {
+            transportId: transport.id,
+            kind,
+            rtpParameters,
+          })) as { id: string }
+          callback({id})
+        } catch (err) {
+          console.error('[mediasoupClient] produce error', err)
+          errback(err)
+        }
+      },
+    )
   }
 
-  transport.on('connectionstatechange', (state: string) => {
+  (transport as BaseTransport).on('connectionstatechange', (state: string) => {
     cb.onConnectionStateChange?.({ [direction]: state } as any);
   });
 }
 
 function attachProtooRequestHandlers() {
-  protooPeer!.on('request', async (req: ProtooRequest, accept: () => void, reject: (e: any) => void) => {
-    try {
-      switch (req.method) {
-        case 'newConsumer': {
-          const {
-            id: consumerId,
-            producerId,
-            kind,
-            rtpParameters,
-            appData,
-          } = req.data as {
-            id: string;
-            producerId: string;
-            kind: TrackKind;
-            rtpParameters: RtpParameters;
-            appData?: any;
-          };
+  if (!protooPeer) return
 
-          if (!recvTransport) throw new Error('recvTransport not ready');
+  protooPeer.on(
+    'request',
+    async (req: ProtooRequest, accept: () => void, reject: (e: unknown) => void) => {
+      try {
+        switch (req.method) {
+          case 'newConsumer': {
+            const {
+              id: consumerId,
+              producerId,
+              kind,
+              rtpParameters,
+              appData,
+            } = req.data as {
+              id: string;
+              producerId: string;
+              kind: TrackKind;
+              rtpParameters: RtpParameters;
+              appData?: any;
+            }
 
-          const consumer = await recvTransport.consume({
-            id: consumerId,
-            producerId,
-            kind,
-            rtpParameters,
-            appData,
-          });
-          consumers.set(consumerId, consumer);
+            if (!recvTransport) throw new Error('recvTransport not ready')
 
-          const stream = new MediaStream();
-          stream.addTrack((consumer as any).track);
-          remoteStreams.set(producerId, stream);
-          emit('onRemoteStream', { producerId, stream, kind });
+            const consumer = await recvTransport.consume({
+              id: consumerId,
+              producerId,
+              kind,
+              rtpParameters,
+              appData,
+            })
 
-          accept();
+            consumers.set(consumerId, consumer)
 
-          try {
-            await protooPeer!.request('resumeConsumer', { consumerId });
-          } catch {
-            await protooPeer!.request('consumerResume', { consumerId }).catch(() => {});
+            const stream = new MediaStream()
+            stream.addTrack(consumer.track)
+            remoteStreams.set(producerId, stream)
+            emit('onRemoteStream', {producerId, stream, kind})
+
+            accept()
+            await resumeConsumer(consumerId)
+
+            consumer.on('transportclose', () => {
+              consumers.delete(consumerId)
+              remoteStreams.delete(producerId)
+              emit('onRemoteTrackEnded', {producerId, kind})
+            })
+
+            consumer.on('producerclose', () => {
+              try {
+                consumer.close()
+              } catch {
+              }
+              consumers.delete(consumerId)
+              remoteStreams.delete(producerId)
+              emit('onRemoteTrackEnded', {producerId, kind})
+            })
+
+            break
           }
 
-          consumer.on('transportclose' as any, () => {
-            consumers.delete(consumerId);
-            remoteStreams.delete(producerId);
-            emit('onRemoteTrackEnded', { producerId, kind });
-          });
+          case 'consumerClosed': {
+            const {consumerId, producerId, kind} = (req.data || {}) as {
+              consumerId?: string;
+              producerId?: string;
+              kind?: TrackKind;
+            }
 
-          consumer.on('producerclose' as any, () => {
-            try { (consumer as any).close(); } catch {}
-            consumers.delete(consumerId);
-            remoteStreams.delete(producerId);
-            emit('onRemoteTrackEnded', { producerId, kind });
-          });
+            if (consumerId) {
+              const consumer = consumers.get(consumerId)
+              try {
+                consumer?.track?.stop?.()
+              } catch {
+              }
+              try {
+                consumer?.close?.()
+              } catch {
+              }
+              consumers.delete(consumerId)
+            }
 
-          break;
-        }
+            if (producerId) remoteStreams.delete(producerId)
 
-        case 'consumerClosed': {
-          const { consumerId, producerId, kind } = (req.data || {}) as { consumerId?: string; producerId?: string; kind?: TrackKind };
-          if (consumerId) {
-            const consumer = consumers.get(consumerId);
-            try { (consumer as any)?.track?.stop?.(); (consumer as any)?.close?.(); } catch {}
-            consumers.delete(consumerId);
+            emit('onRemoteTrackEnded', {producerId, kind})
+            accept()
+            break
           }
-          if (producerId) remoteStreams.delete(producerId);
-          emit('onRemoteTrackEnded', { producerId, kind });
-          accept();
-          break;
-        }
 
-        default:
-          accept();
+          default:
+            accept()
+        }
+      } catch (err) {
+        console.error('[protoo][request] error', req.method, err)
+        reject(err)
       }
-    } catch (err) {
-      console.error('[protoo][request] error', req.method, err);
-      reject(err);
     }
-  });
+  );
 }
