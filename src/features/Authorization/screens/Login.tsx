@@ -1,5 +1,5 @@
 import React, {memo, useCallback, useMemo, useState} from 'react'
-import {ImageStyle, StyleSheet, Text, TextStyle, View, ViewStyle} from 'react-native'
+import {ImageStyle, StyleSheet, Text, TextInput, TextStyle, View, ViewStyle} from 'react-native'
 import {Input} from '../../../shared/components/Input.tsx'
 import {Button} from '../../../shared/components/Button.tsx'
 import {colors} from '../../../shared/theme/colors.ts'
@@ -15,11 +15,13 @@ export const Login = memo(({}: TProps) => {
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const passwordRef = React.useRef<TextInput>(null)
 
   const isLogining = useMemo(() => isLoading(credentials.loadingState), [credentials.loadingState])
 
   const onLoginPress = useCallback(() =>
     login(email, password), [email, password])
+  const onSubmitEmail = useCallback(() => passwordRef.current?.focus(), [email])
 
   return (
     <View style={styles.container}>
@@ -29,11 +31,20 @@ export const Login = memo(({}: TProps) => {
       </View>
       <View style={styles.inputContainer}>
         <Text>Email Address</Text>
-        <Input placeholder={'Enter your email'} inputMode={'email'} onChangeText={setEmail}/>
+        <Input
+          placeholder={'Enter your email'}
+          inputMode={'email'}
+          onChangeText={setEmail}
+          onSubmitEditing={onSubmitEmail}/>
       </View>
       <View style={styles.inputContainer}>
         <Text>Password</Text>
-        <Input placeholder={'Enter your password'} secureTextEntry onChangeText={setPassword}/>
+        <Input
+          ref={passwordRef}
+          placeholder={'Enter your password'}
+          secureTextEntry
+          onChangeText={setPassword}
+          onSubmitEditing={onLoginPress}/>
       </View>
       <View style={styles.errorContainer}>
         <Text style={styles.error}>{credentials?.error?.message}</Text>

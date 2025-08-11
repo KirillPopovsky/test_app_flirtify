@@ -11,17 +11,21 @@ import {colors} from '../../../shared/theme/colors.ts'
 import {useAuthStore} from '../../Authorization/common/authStore.ts'
 import {useNavigation} from '../../../shared/navigation/interfaces.ts'
 import {Pages} from '../../../shared/navigation/screens.ts'
+import {useVideoChatStore} from '../common/useVideoChatStore.ts'
 
 type TProps = {}
 
 export const RoomList = memo(({}: TProps) => {
   const [roomId, setRoomId] = useState('')
   const  navigation = useNavigation()
-  const rooms = ['test-room1', 'test-room2', 'test-room3', 'test-room4', 'test-room5']
   const {logout} = useAuthStore()
+  const {handleJoinRoom, rooms} = useVideoChatStore()
 
   const onJoinRecentRoomPress = useCallback((roomId: string) => navigation.navigate(Pages.RoomCall, {roomId}), [])
-  const onJoinRoomPress = useCallback(() => navigation.navigate(Pages.RoomCall, {roomId}), [roomId])
+  const onJoinRoomPress = useCallback(() => {
+    navigation.navigate(Pages.RoomCall, {roomId})
+    handleJoinRoom(roomId)
+  }, [roomId, handleJoinRoom])
 
   const renderRoom = useCallback(({item}: ListRenderItemInfo<string>) =>
     <CallHistoryElement roomId={item} onPress={onJoinRecentRoomPress}/>, [])
@@ -32,7 +36,12 @@ export const RoomList = memo(({}: TProps) => {
         <Header text={'Video Chat'}/>
         <View style={styles.inputContainer}>
           <View style={styles.inputWrapper}>
-            <Input placeholder={'Enter room id'} onChangeText={setRoomId}/>
+            <Input
+              placeholder={'Enter room id'}
+              onChangeText={setRoomId}
+              inputMode={'none'}
+              onSubmitEditing={onJoinRoomPress}
+            />
           </View>
           <IconButton icon={faVideo} onPress={onJoinRoomPress}/>
         </View>

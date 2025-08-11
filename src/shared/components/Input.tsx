@@ -1,8 +1,8 @@
-import React, {memo} from 'react'
+import React, {memo, Ref} from 'react'
 import {StyleSheet, TextInput, TextInputProps, TextStyle, ViewStyle} from 'react-native'
 import {colors} from '../theme/colors.ts'
 
-export const Input = memo((props: TextInputProps) => {
+export const Input = memo((props: TextInputProps & {ref?: Ref<TextInput>}) => {
 
   return (
       <TextInput
