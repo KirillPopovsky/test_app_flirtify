@@ -1,5 +1,5 @@
 import {AuthInvalidCredentialsError} from '../../../shared/requests/Errors.ts'
-import {BaseRequest} from '../../../shared/common/BaseRequest.ts'
+import {BaseRequest} from '../../../shared/requests/BaseRequest.ts'
 
 class AuthAPI extends BaseRequest{
   async signIn(email: string, passwords: string): Promise<string> {

@@ -6,7 +6,7 @@ import {colors} from '../../../shared/theme/colors.ts'
 import {faVideo} from '@fortawesome/free-solid-svg-icons'
 import {FontAwesomeIcon} from '@fortawesome/react-native-fontawesome'
 import {useAuthStore} from '../common/authStore.ts'
-import {isLoading} from '../../../shared/common/Loading.ts'
+import {isLoading} from '../../../shared/requests/Loading.ts'
 
 type TProps = {}
 
@@ -46,7 +46,6 @@ export const Login = memo(({}: TProps) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    // justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 32,
   } as ViewStyle,

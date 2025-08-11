@@ -1,4 +1,4 @@
-import {AuthInvalidCredentialsError, ServerError} from '../requests/Errors.ts'
+import {AuthInvalidCredentialsError, ServerError} from './Errors.ts'
 import {UrlHelper} from './urlHelper.ts'
 
 export interface IRequestOptions {

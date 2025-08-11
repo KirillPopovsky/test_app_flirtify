@@ -1,4 +1,4 @@
-import React, {memo} from 'react'
+import React, {memo, useMemo} from 'react'
 import {ActivityIndicator, StyleSheet, Text, TouchableOpacity, ViewStyle} from 'react-native'
 import {colors} from '../theme/colors.ts'
 
@@ -6,12 +6,15 @@ type TProps = {
   text: string,
   isLoading?: boolean,
   onPress?: () => void,
+  color?: string,
 }
 
-export const Button = memo(({text, isLoading,onPress }: TProps) => {
+export const Button = memo(({text, isLoading, onPress, color}: TProps) => {
+
+  const buttonStyle = useMemo(() => [styles.container, {backgroundColor: color ?? colors.primary}], [color])
 
   return (
-    <TouchableOpacity style={styles.container} onPress={onPress}>
+    <TouchableOpacity style={buttonStyle} onPress={onPress}>
       <Text style={styles.text}>{text}</Text>
       {isLoading && <ActivityIndicator size={'small'} color={'white'}/>}
     </TouchableOpacity>
@@ -31,7 +34,7 @@ const styles = StyleSheet.create({
     borderRadius: 18,
   } as ViewStyle,
   text:{
-    color: 'white',
+    color: colors.white,
     fontSize: 14,
   }
 })

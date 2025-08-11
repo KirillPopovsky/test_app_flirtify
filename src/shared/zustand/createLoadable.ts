@@ -1,5 +1,5 @@
 import type {StoreApi} from 'zustand';
-import {Loadable, Loading, isLoading as checkIsLoading, failed} from '../common/Loading';
+import {Loadable, Loading, isLoading as checkIsLoading, failed} from '../requests/Loading.ts';
 
 export type ICreateLoadable<DATA> = {
   data: Loadable<DATA>;
