@@ -9,13 +9,8 @@ import {useNavigation} from '@react-navigation/native'
 type TrackKind = 'audio' | 'video';
 type Remote = { producerId: string; kind: TrackKind; stream: MediaStream };
 
-type UseRoomClientResult = {
-  endCall: () => void;
-  localStream?: MediaStream;
-  remoteStreams: MediaStream[];
-};
 
-export const useRoomClient = (): UseRoomClientResult => {
+export const useRoomClient = () => {
   const {roomId} = useRoute<Pages.RoomCall>().params
   const navigation = useNavigation()
   const {credentials} = useAuthState()
@@ -33,10 +28,10 @@ export const useRoomClient = (): UseRoomClientResult => {
     () => ({
       onRemoteStream: ({producerId, stream, kind}: Remote) => {
         setRemotes(prev => {
-          const i = prev.findIndex(r => r.producerId === producerId && r.kind === kind)
-          if (i >= 0) {
+          const index = prev.findIndex(remote => remote.producerId === producerId && remote.kind === kind)
+          if (index >= 0) {
             const next = prev.slice()
-            next[i] = {...next[i], stream}
+            next[index] = {...next[index], stream}
             return next
           }
           return [...prev, {producerId, kind, stream}]
@@ -65,12 +60,12 @@ export const useRoomClient = (): UseRoomClientResult => {
       await connectToRoom({wsUrl, roomId, peerId, callbacks})
       const stream = await startSendingVideo({withAudio: true})
       setLocalStream(stream)
-    } catch (e) {
-      console.warn('[mediasoup] connect failed:', e)
+    } catch (error) {
+      console.warn('[mediasoup] connect failed:', error)
     }
   }, [wsUrl, roomId, peerId, callbacks]);
 
-  const endCall = useCallback(() => {
+  const onEndCallPress = useCallback(() => {
     stopSendingVideo()
     leaveRoom()
     navigation.goBack()
@@ -85,9 +80,11 @@ export const useRoomClient = (): UseRoomClientResult => {
   }, [connect]);
 
   const remoteStreams = useMemo(
-    () => remotes.filter(r => r.kind === 'video').map(r => r.stream),
+    () => remotes
+      .filter(remote => remote.kind === 'video')
+      .map(remote => remote.stream),
     [remotes],
   )
 
-  return {endCall, localStream, remoteStreams}
+  return {onEndCallPress, localStream, remoteStreams}
 };

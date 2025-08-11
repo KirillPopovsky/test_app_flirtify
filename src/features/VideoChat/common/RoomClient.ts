@@ -79,10 +79,6 @@ export interface StateSnapshot {
   remoteStreamsCount: number;
 }
 
-/* ============================
- * Internal state
- * ============================ */
-
 let device: mediasoupClient.Device | null = null;
 let protooPeer: protoo.Peer | null = null;
 let sendTransport: SendTransportLike | null = null;
@@ -93,37 +89,27 @@ const consumers = new Map<string, Consumer>()
 const remoteStreams = new Map<string, MediaStream>()
 
 let localStream: MediaStream | null = null;
-let cb: Callbacks = {};
-
-/* ============================
- * Small helpers
- * ============================ */
+let callbacks: Callbacks = {}
 
 function emit<K extends keyof Callbacks>(
   name: K,
   payload: Parameters<NonNullable<Callbacks[K]>>[0],
 ) {
-  const fn = cb[name] as any
-  if (typeof fn === 'function') {
+  const func = callbacks[name] as any
+  if (typeof func === 'function') {
     try {
-      fn(payload)
-    } catch (err) {
-      console.warn(`[mediasoupClient] callback ${String(name)} threw`, err)
+      func(payload)
+    } catch (error) {
+      console.warn(`[mediasoupClient] callback ${String(name)} threw`, error)
     }
   }
 }
 
 function stopAndReleaseStream(stream?: MediaStream | null) {
   if (!stream) return
-  try {
-    stream.getTracks().forEach((t) => {
-      try {
-        t.stop()
-      } catch {
-      }
-    })
-  } catch {
-  }
+  stream.getTracks().forEach((track) => {
+    track.stop()
+  })
 }
 
 async function tryRequest(method: string, data?: any) {
@@ -146,7 +132,7 @@ export async function connectToRoom({
                                       peerId,
                                       callbacks = {},
                                     }: ConnectOptions): Promise<boolean> {
-  cb = { ...cb, ...callbacks };
+  callbacks = {...callbacks, ...callbacks}
 
   const transport = new protoo.WebSocketTransport(wsUrl);
   protooPeer = new protoo.Peer(transport);
@@ -246,17 +232,17 @@ export async function connectToRoom({
         });
 
         resolve(true);
-      } catch (err) {
-        console.error('[mediasoupClient] connect error', err);
-        cb.onError?.(err);
-        reject(err);
+      } catch (error) {
+        console.error('[mediasoupClient] connect error', error)
+        callbacks.onError?.(error)
+        reject(error)
       }
     });
 
     protooPeer.on('failed', () => {
-      const err = new Error('Protoo connection failed');
-      cb.onError?.(err);
-      reject(err);
+      const error = new Error('Protoo connection failed')
+      callbacks.onError?.(error)
+      reject(error)
     });
   });
 }
@@ -272,13 +258,13 @@ export async function startSendingVideo(
   const audioTrack = withAudio ? localStream.getAudioTracks?.()[0] : null;
 
   if (videoTrack) {
-    const vp = await sendTransport.produce({ track: videoTrack });
-    producers.set('video', vp);
+    const videoProducer = await sendTransport.produce({track: videoTrack})
+    producers.set('video', videoProducer)
   }
 
   if (audioTrack) {
-    const ap = await sendTransport.produce({ track: audioTrack });
-    producers.set('audio', ap);
+    const audioProducer = await sendTransport.produce({track: audioTrack})
+    producers.set('audio', audioProducer)
   }
 
   return localStream;
@@ -304,9 +290,6 @@ export async function stopSendingVideo(): Promise<void> {
   localStream = null
 }
 
-/**
- * Полный выход из комнаты.
- */
 export async function leaveRoom(): Promise<void> {
   try {
     await stopSendingVideo();
@@ -342,9 +325,9 @@ export async function leaveRoom(): Promise<void> {
     protooPeer = null
 
     device = null;
-  } catch (err) {
-    console.error('[mediasoupClient] leaveRoom error', err);
-    cb.onError?.(err);
+  } catch (error) {
+    console.error('[mediasoupClient] leaveRoom error', error);
+    callbacks.onError?.(error)
   }
 }
 
@@ -395,16 +378,16 @@ function setupTransportEvents(transport: SendTransportLike | RecvTransportLike, 
             rtpParameters,
           })) as { id: string }
           callback({id})
-        } catch (err) {
-          console.error('[mediasoupClient] produce error', err)
-          errback(err)
+        } catch (error) {
+          console.error('[mediasoupClient] produce error', error)
+          errback(error)
         }
       },
     )
   }
 
   (transport as BaseTransport).on('connectionstatechange', (state: string) => {
-    cb.onConnectionStateChange?.({ [direction]: state } as any);
+    callbacks.onConnectionStateChange?.({[direction]: state} as any)
   });
 }
 

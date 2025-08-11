@@ -12,9 +12,7 @@ export const PermissionChecker = memo(({}: TProps) => {
     checkPermission()
   }, [])
 
-  const onOpenSettingsPress = useCallback(() => {
-    Linking.openSettings()
-  }, [])
+  const onOpenSettingsPress = useCallback(() => Linking.openSettings, [])
 
   return (
     isDenied ?
